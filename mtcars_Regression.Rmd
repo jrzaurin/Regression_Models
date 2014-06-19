@@ -1,0 +1,132 @@
+###The relationship between the fuel consumption and other properties of cars for early 70's models.
+
+####Abstract
+This report presents a study of the relationship between the fuel consumption and other properties of cars, in particular, the transmission. From this study I find that cars with manual transmission have, on average, a lower consumption of fuel (1973-74 models). Precisely, the difference in miles per gallon (MPG) between manual and automatic cars is 7.24 $\pm$ 4.04. When other variables such as weight or horse power, are taken into account, the trend is preserved (i.e. manual cars consume less on average) but the difference is smaller. This and other results are described in detail below.
+
+####The Data
+The data used for this study is the mtcars dataset within the datasets package in R. The data was extracted from the 1974 Motor Trend US magazine, and comprises fuel consumption and 10 aspects of automobile design and performance for 32 cars (1973–74 models). Details of the dataset can be found [here](http://stat.ethz.ch/R-manual/R-devel/library/datasets/html/mtcars.html). The only variable that is not self explanatory is perhaps VS, referring to the V engine (0 = V engine, 1 = straight engine). 
+
+####Exploratory analysis
+An exhaustive exploratory analysis was carried out with the aim of adequately select those variables that have a strong relationship with the MPG. Due to space limitation only a fraction of the code is shown in this document. The entire code can be found at [repo](https://github.com/jrzaurin/Regression_Models). Note that if the main purpose of this analysis is to investigate whether automatic or manual transmission is better for MPG, a "simple" t-test comparing the mean between the two groups will directly answer the question: 
+
+```{r, eval=FALSE}
+data(mtcars)
+am0 <- mtcars$mpg[mtcars$am == 0]; am1 <- mtcars$mpg[mtcars$am == 1]
+t.test(am0, am1, paired = FALSE, alternative="two.sided", var.equal=FALSE)
+```
+
+From these I find that the difference between the means MPG for manual and automatic cars is 7.24 $\pm$ 4.04, with a p-value of 0.001. 
+
+Similarly, t tests, or analysis of variance (ANOVA) tests when there are more than two groups, can be performed for all the other variables in the dataset that can be treated as groups or factors. These are: CYL, VS, GEAR and CARB. The full code can be found in the link provided above. When these variables are consider individually, they are _all_ found to be significantly related with MPG. We will later investigate how these relationships are adjusted when more than one variable is taken into account. 
+
+At this stage it is important to add a caveat about the nature of the variables in the dataset. While VS and AM are Boolean, with 1 and 0 denoting certain characteristics of cars, CYL, GEAR and CARB are discrete numeric variables. Therefore, these can be treated as discrete numeric or factor variables, and the results of the analysis depend on that "selection". I will briefly discussed this issue in the Discussion section. Throughout the document, these variables are treated as numeric unless otherwise stated. 
+
+To explore the relationship between the remaining (continuous) numerical variables, Fig 1 shows a pairwise panel plot. As is clear from the panel, most of the variables are directly correlated with each other. Therefore, one has to be careful when using regression models since the presence of confounders is almost guaranteed. 
+
+Once we have a general idea of the potential relationships between the different variables, I proceed with a detailed regression analysis. To that aim I will first use a model comprising _all_ variables, and then I will perform a backwards stepwise selection by both forward and backward exact AIC ([Akaike Information Criterion](http://en.wikipedia.org/wiki/Akaike_information_criterion)).
+
+```{r, eval=FALSE}
+library(MASS); full.model <- lm(mpg~., data = mtcars)
+step <- stepAIC(full.model, direction="both", trace = FALSE); summary(step)
+```
+
+Interestingly, the results of this analysis show that the $\sim$ 84% of the variability of MPG can be accounted by a model comprising just WT, QSEC and AM, leaving out variables that are, a priori, important, such as HP or CYL. This is a clear evidence of multiple correlations within the dataset. Due to space limitation I will no discuss this in detail.
+
+To further explore which variables are strongly related with MPG it is possible to use some more "sophisticated" tests. Even though we are bound to use _only_ base packages for this work, the following R packages are extremely interesting and helpful for selecting a particular regression model. Therefore, I hope the reader finds them as useful as I did/do. 
+
+The following code/analysis performs model selection by exhaustive search, forward or backward stepwise, sequential replacement, and some other metrics (see the package [leaps](http://cran.r-project.org/web/packages/leaps/leaps.pdf) and the repo [repo](https://github.com/jrzaurin/Regression_Models) for details). 
+
+```{r, eval=FALSE}
+data(mtcars)
+library(leaps);library(cluster); library(car)
+leaps<-regsubsets(mpg ~ . , data=mtcars, nbest=1);summary(leaps)
+subsets(leaps, statistic = "adjr2")
+```
+
+The results of this analysis are shown in Fig2 in the appendix. The figure shows that, effectively, once WT, QSEC and AM are included in the regression, the increase of the adjusted R$^2$ caused by including more variables is nearly negligible (or even negative), which further reinforces the previous result obtained using stepAIC. Finally, it is possible to perform an additional test that will allow to easily visualize the relative importance of each variable in the dataset, with respect to MPG: 
+
+```{r, eval=FALSE}
+library(relaimpo)
+relimp <- calc.relimp(full.model,type=c("last","pratt"),rela=TRUE)
+boot <- boot.relimp(full.model, b = 100, type = c("last", "pratt"), rank = TRUE, diff = TRUE, rela = TRUE) ; plot(booteval.relimp(boot,sort=TRUE))
+```
+
+The results of this analysis are shown in Fig3 (details for relimpo can be found in [relimpo](http://cran.r-project.org/web/packages/relaimpo/relaimpo.pdf)). As expected, is entirely consistent with all the previous tests (emphasize the only reason to include this test is to ease visualization). 
+
+####Results: model Selection
+Based on the exploratory analysis described before, it is clear that the simplest model that explains most of the variability of MPG includes WT, QSEC and AM. The increase in percentage of variability explained caused by including any additional variable in the regression is negligible (from ~84% to 86%). Therefore, the _final_ model used for this analysis is:
+
+$H_{final}$ = $\beta_0$ + $\beta_1 WT$ + $\beta_2 QSEC$ + $\beta_3 \mathbb{1} (AM = Manual)$ + $e^*$
+
+where:
+
+$\beta_0$ = 9.62 $\pm$ 14.25,
+$\beta_1$ = -3.92 $\pm$ 1.46,
+$\beta_2$ = 1.23 $\pm$ 0.59 and  $\beta_3$ = 2.94 $\pm$ 2.88 (uncertainties are 95% confidence intervals).
+
+It is notable that, among the three variables considered, the weakest correlation, as measured by the corresponding P-value, is that of AM (P-value = 0.047). Fig4, along with Fig1 show that the regression model fulfills all the theoretical requirements, i.e: linearity, normal residuals and constant variability.
+
+####Summary and Discussion
+The results of this study show that there is a significant relationship between the fuel consumption (MPG) and the transmission in cars (AM), for 1973–74 models. When analyzing the relationship considering _only_ MPG and AM, we find that the difference in MPG between manual and automatic cars is, on average, 7.24 $\pm$ 4.04. Among the remaining variables, weight (WT) and quarter mile time (QSEC), along with AM, are those that explain the highest percentage of variability in MPG. When a model comprising these three variables is considered, I find that, everything else held constant, manual cars can reach, on average, 2.94 $\pm$ 2.88 miles farther per gallon of fueled consumed, compared to automatic cars. 
+
+Finally, I would like to briefly mention that the results of this study significantly change if number of cylinders (CYL), number of forward gears (GEAR) and number of carburetors (CARB) are considered as factor variables during the process (rather than discrete numeric). However, the number of observations for this dataset is particularly small (32). Therefore, when such approach is considered (which is actually the adequate approach), the variability of the variable MPG is spread over more regressors. The overall results is that the existing relationships are statistically weaker and therefore, less certain. If a significant number of regressors are considered as factors variables, a larger number of observations is required to adequately study the variability of a certain variable. Nonetheless, the code one would use to carry out such study can also be found at [repo](https://github.com/jrzaurin/Regression_Models).
+
+####Appendix
+
+```{r, echo=FALSE, fig.height = 4.75, fig.width= 7, message=FALSE, warning=FALSE, cache=FALSE}
+data(mtcars)
+mtcars$am <-  as.factor(mtcars$am)
+mtcars$vs <-  as.factor(mtcars$vs)
+num.cols <- c(1,3,4,5,6,7)
+mtcars.num <- mtcars[,num.cols]
+library(gclus);library(cluster)
+mt.cor <- abs(cor(mtcars.num)) #get the correlation matrix
+mt.col <- dmat.color(mt.cor) # asign colors
+# reorder variables so those with highest correlation
+# are closest to the diagonal
+mt.s <- order.single(mt.cor) 
+cpairs(mtcars.num, mt.s, panel.colors=mt.col, gap = .5)
+```
+
+Fig1. pairwise plot for all the (continuous) numerical variables. The colors, and the proximity to the main diagonal code the strength of the correlation. Red: highly correlated. Yellow: weak correlation. 
+
+```{r, echo=FALSE, fig.height = 4.5, fig.width= 8, message=FALSE, warning=FALSE, cache=FALSE}
+rm(list=ls())
+data(mtcars)
+full.model <- lm(mpg~., data = mtcars)
+library(leaps)
+leaps<-regsubsets(mpg ~ . , data=mtcars, nbest=1)
+# plot statistic rsq and adjr2
+library(cluster)
+library(car)
+par(mfrow=c(1,2))
+plot1 <- subsets(leaps, statistic= "rsq", legend = FALSE)
+plot2 <-subsets(leaps, statistic = "adjr2", legend = FALSE)
+```
+
+Fig2. The r-squared and adjusted r-squared statistic for the best fitting model comprising an increasing number of variables up to a maximum of 8. Given its exploratory nature, the figure is not intended to be aesthetically perfect. Nonetheless the abbreviations are straightforward and the results are clear, i.e. a model comprising WT+QSEC+AM explains most of the variability of the data. 
+
+```{r, echo = FALSE, message=FALSE, warning=FALSE, cache=FALSE}
+library(relaimpo)
+rm(list=ls())
+data(mtcars)
+full.model <- lm(mpg~., data = mtcars)
+relimp <- calc.relimp(full.model,type=c("last","pratt"),rela=TRUE)
+#bootstrap replicates. Note: larger bootstrap replicates will incurr in
+#a singularity
+boot <- boot.relimp(full.model, b = 100, type = c("last", "pratt"), rank = TRUE, diff = TRUE, rela = TRUE)
+plot(booteval.relimp(boot,sort=TRUE))
+```
+
+Fig3. Relative importance of each variable in the dataset. Again, WT, QSEC and AM are the variables with the highest relative importance.
+
+```{r, echo = FALSE,  fig.height = 6, message=FALSE, warning=FALSE, cache=FALSE}
+data(mtcars)
+mtcars$am <-  as.factor(mtcars$am)
+mtcars$vs <-  as.factor(mtcars$vs)
+fit1 <- lm(mpg ~ wt + qsec + am, data = mtcars)
+layout(matrix(c(1,2,3,4),2,2))
+plot(fit1)
+```
+
+Fig4. The statistics showing that the behavior of the regression model is adequate in terms of normal residuals and constant variability. In addition, the leverage is also "controlled" within reasonable upper limits. 
